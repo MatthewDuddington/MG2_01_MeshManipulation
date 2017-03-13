@@ -1,0 +1,9 @@
+*.csproj
+*.sln
+*.suo
+Unity Version/MG2_01_MeshManipulation/Library/
+Unity Version/MG2_01_MeshManipulation/Temp/
+Builds/
+Assembly-CSharp.csproj.FilesWrittenAbsolute.txt
+Assembly-CSharp.dll
+Assembly-CSharp.dll.mdb
