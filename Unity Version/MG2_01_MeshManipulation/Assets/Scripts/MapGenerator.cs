@@ -1,4 +1,5 @@
 ﻿// Base code written while following tutorial: Procedural Landmass Generation (Unity 5) (c) Sebastian Lague 2016
+// Comments and supplimentory code (c) Matthew Duddington 2017 
 
 using System.Collections;
 using System.Collections.Generic;
@@ -6,7 +7,7 @@ using UnityEngine;
 
 public class MapGenerator : MonoBehaviour {
 
-  public enum DrawMode { NoiseMap, ColourMap };
+  public enum DrawMode { NoiseMap, ColourMap, Mesh };
   public DrawMode drawMode;
 
   public int mapWidth;
@@ -17,7 +18,7 @@ public class MapGenerator : MonoBehaviour {
   [Range(0,1)] public float persistance;
   public float lacunarity;
 
-  public int seed;
+  public int seed;        // Random number seed - to enable regeneration of specific maps
   public Vector2 offset;
 
   public bool autoUpdate;
@@ -56,6 +57,9 @@ public class MapGenerator : MonoBehaviour {
       break;
     case DrawMode.ColourMap:
       display.DrawTexture (TextureGenerator.TextureFromColourMap (colourMap, mapWidth, mapHeight));
+      break;
+    case DrawMode.Mesh:
+      display.DrawMesh (MeshGenerator.GenerateTerrainMesh (noiseMap), TextureGenerator.TextureFromColourMap (colourMap, mapWidth, mapHeight));
       break;
     default:
       Debug.LogWarning ("No draw mode selected");

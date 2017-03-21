@@ -1,4 +1,5 @@
 ﻿// Base code written while following tutorial: Procedural Landmass Generation (Unity 5) (c) Sebastian Lague 2016
+// Comments and supplimentory code (c) Matthew Duddington 2017 
 
 using System.Collections;
 using System.Collections.Generic;
