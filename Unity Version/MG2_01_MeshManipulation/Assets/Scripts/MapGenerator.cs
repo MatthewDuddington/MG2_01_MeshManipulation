@@ -10,8 +10,12 @@ public class MapGenerator : MonoBehaviour {
   public enum DrawMode { NoiseMap, ColourMap, Mesh };
   public DrawMode drawMode;
 
-  public int mapWidth;
-  public int mapHeight;
+  // Size of mesh map chunks
+  // Unity limits mesh vertices to 65,025 (255 * 255)
+  // 241 because we use width - 1 and 240 has lots of factors to use with Level of Detail divisions
+  const int mapChunkSize = 241;
+  [Range(0,6)]
+  public int levelOfDetail;
   public float noiseScale;
 
   public int octaves;
@@ -21,13 +25,16 @@ public class MapGenerator : MonoBehaviour {
   public int seed;        // Random number seed - to enable regeneration of specific maps
   public Vector2 offset;
 
+  public float meshHeightMultiplyer;  // Scalar to controll exageration of terrain height
+  public AnimationCurve meshHeightCurve;  // Curve to control how much multiplyer effects different regions
+
   public bool autoUpdate;
 
   public TerrainType[] regions;
 
   public void GenerateMap() {
-    float[,] noiseMap = Noise.GenerateNoiseMap (mapWidth,
-                                                mapHeight,
+    float[,] noiseMap = Noise.GenerateNoiseMap (mapChunkSize,
+                                                mapChunkSize,
                                                 seed,
                                                 noiseScale,
                                                 octaves,
@@ -35,14 +42,14 @@ public class MapGenerator : MonoBehaviour {
                                                 lacunarity,
                                                 offset
                                                );
-    Color[] colourMap = new Color[mapWidth * mapHeight];
+    Color[] colourMap = new Color[mapChunkSize * mapChunkSize];
 
-    for (int y = 0; y < mapHeight; y++) {
-      for (int x = 0; x < mapWidth; x++) {
+    for (int y = 0; y < mapChunkSize; y++) {
+      for (int x = 0; x < mapChunkSize; x++) {
         float currentHeight = noiseMap [x, y];
         for (int i = 0; i < regions.Length; i++) {
           if (currentHeight <= regions [i].height) {
-            colourMap [y * mapWidth + x] = regions [i].colour;
+            colourMap [y * mapChunkSize + x] = regions [i].colour;
 
             break;
           }
@@ -50,16 +57,17 @@ public class MapGenerator : MonoBehaviour {
       }
     }
 
+    // Switch for different rendering modes in the editor
     MapDisplay display = FindObjectOfType<MapDisplay> ();
     switch (drawMode) {
-    case DrawMode.NoiseMap:
+    case DrawMode.NoiseMap:  // Flat greyscale noise map
       display.DrawTexture (TextureGenerator.TextureFromHeightMap (noiseMap));
       break;
-    case DrawMode.ColourMap:
-      display.DrawTexture (TextureGenerator.TextureFromColourMap (colourMap, mapWidth, mapHeight));
+    case DrawMode.ColourMap:  // Flat coloured regions map
+      display.DrawTexture (TextureGenerator.TextureFromColourMap (colourMap, mapChunkSize, mapChunkSize));
       break;
-    case DrawMode.Mesh:
-      display.DrawMesh (MeshGenerator.GenerateTerrainMesh (noiseMap), TextureGenerator.TextureFromColourMap (colourMap, mapWidth, mapHeight));
+    case DrawMode.Mesh:  // Textured hight map effected mesh
+      display.DrawMesh (MeshGenerator.GenerateTerrainMesh (noiseMap, meshHeightMultiplyer, meshHeightCurve, levelOfDetail), TextureGenerator.TextureFromColourMap (colourMap, mapChunkSize, mapChunkSize));
       break;
     default:
       Debug.LogWarning ("No draw mode selected");
@@ -68,12 +76,6 @@ public class MapGenerator : MonoBehaviour {
   }
 
   void OnValidate() {
-    if (mapWidth < 1) {
-      mapWidth = 1;
-    }
-    if (mapHeight < 1) {
-      mapHeight = 1;
-    }
     if (lacunarity < 1) {
       lacunarity = 1;
     }

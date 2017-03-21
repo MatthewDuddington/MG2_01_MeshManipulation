@@ -7,7 +7,7 @@ using UnityEngine;
 
 public static class MeshGenerator {
 
-  public static MeshData GenerateTerrainMesh(float[,] heightMap) {
+  public static MeshData GenerateTerrainMesh(float[,] heightMap, float heightMultiplyer, AnimationCurve heightCurve, int levelOfDetail) {
     // Determine size of map mesh based on the heightmap
     int width = heightMap.GetLength (0);
     int height = heightMap.GetLength (1);
@@ -16,23 +16,29 @@ public static class MeshGenerator {
     float topLeftX = (width - 1) * -0.5f;
     float topLeftZ = (height - 1) * 0.5f;
 
-    MeshData meshData = new MeshData (width, height);
+    // If the level of detail is at 0 manually ensure 1 is passed through
+    int meshSimplificationIncrement = (levelOfDetail == 0) ? 1 : levelOfDetail * 2; 
+
+    // Level of detail to build the mesh at (meshSimplificationIncrement should be a factor of the mesh width)
+    int verticesPerLine = (width - 1) / meshSimplificationIncrement + 1;
+
+    MeshData meshData = new MeshData (verticesPerLine, verticesPerLine);
     int vertexIndex = 0;
 
     // Loop across each row and column vertex in the mesh
-    for (int y = 0; y < height; y++) {
-      for (int x = 0; x < width; x++) {
+    for (int y = 0; y < height; y += meshSimplificationIncrement) {
+      for (int x = 0; x < width; x += meshSimplificationIncrement) {
 
-        // Add a vector 3 position for each vertex based on its index within the rows and columns, plus the centering offset
-        meshData.vertices [vertexIndex] = new Vector3 (topLeftX + x, heightMap [x, y], topLeftZ - y);
+        // Add a vector 3 position for each vertex based on its index within the rows and columns, plus the centering and height offsets and smoothing curve
+        meshData.vertices [vertexIndex] = new Vector3 (topLeftX + x, heightCurve.Evaluate(heightMap[x, y]) * heightMultiplyer, topLeftZ - y);
 
         // Provide each vertex with a uv percentage (0 - 1) position on the texture
         meshData.uvs [vertexIndex] = new Vector2 (x / (float)width, y / (float)height);
 
         // Ignore right and bottom edge vertices, define triangle pairs for each other vertex
         if (x < width - 1 && y < height - 1) {
-          meshData.AddTriangle (vertexIndex, vertexIndex + width + 1, vertexIndex + width);  // Triangle defined by top-left,     bottom-right and bottom left vertices of a square
-          meshData.AddTriangle (vertexIndex + width + 1, vertexIndex, vertexIndex + 1);      // Triangle defined by bottom-right, top-left     and top-right   vertices of a square
+          meshData.AddTriangle (vertexIndex, vertexIndex + verticesPerLine + 1, vertexIndex + verticesPerLine);  // Triangle defined by top-left,     bottom-right and bottom left vertices of a square
+          meshData.AddTriangle (vertexIndex + verticesPerLine + 1, vertexIndex, vertexIndex + 1);      // Triangle defined by bottom-right, top-left     and top-right   vertices of a square
         }
 
         vertexIndex++;
