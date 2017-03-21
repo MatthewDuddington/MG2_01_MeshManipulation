@@ -7,10 +7,12 @@ using UnityEngine;
 
 public static class MeshGenerator {
 
-  public static MeshData GenerateTerrainMesh(float[,] heightMap, float heightMultiplyer, AnimationCurve heightCurve, int levelOfDetail) {
+  public static MeshData GenerateTerrainMesh(float[,] heightMap, float heightMultiplyer, AnimationCurve _heightCurve, int levelOfDetail) {
     // Determine size of map mesh based on the heightmap
     int width = heightMap.GetLength (0);
     int height = heightMap.GetLength (1);
+
+    AnimationCurve heightCurve = new AnimationCurve (_heightCurve.keys);
 
     // Centre map by defining half map size, offset position of top left vertex
     float topLeftX = (width - 1) * -0.5f;

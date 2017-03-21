@@ -8,13 +8,18 @@ public class EndlessTerrain : MonoBehaviour {
   public Transform viewer;                   // The player whos view is being assessed
   public static Vector2 viewerPosition;      // Easy access to the position of that player
 
+  public Material mapMaterial;
+
+  static MapGenerator mapGenerator;  // Easy access to the map generator
+
   int chunkSize;
   int chunksVisibleInViewDistance;           // The number of chunks that will be rendered at the given view distance
 
   Dictionary<Vector2, TerrainChunk> terrainChunkDictionary = new Dictionary<Vector2, TerrainChunk>();
-  List<TerrainChunk> terrainChunksVisibleLastUpdate = new List<TerrainChunk>();
+  List<TerrainChunk> terrainChunksVisibleLastUpdate = new List<TerrainChunk>();  // List of which chunks were visible in the previous frame 
 
   void Start() {
+    mapGenerator = FindObjectOfType<MapGenerator> ();
     chunkSize = MapGenerator.mapChunkSize - 1;
     chunksVisibleInViewDistance = Mathf.RoundToInt(maxViewDistance / chunkSize);
   }
@@ -25,9 +30,11 @@ public class EndlessTerrain : MonoBehaviour {
   }
 
   void UpdateVisibleChunks() {
+    // Hide all the chunks from the previous frame
     for (int i = 0; i < terrainChunksVisibleLastUpdate.Count; i++) {
       terrainChunksVisibleLastUpdate [i].SetVisible (false);
     }
+    // Clear memory of which chunks were visible
     terrainChunksVisibleLastUpdate.Clear ();
 
     // Get the coords of the chunk the viewer is within
@@ -38,17 +45,18 @@ public class EndlessTerrain : MonoBehaviour {
       for (int xOffset = -chunksVisibleInViewDistance; xOffset <= chunksVisibleInViewDistance; xOffset++) {
         Vector2 viewedChunkCoord = new Vector2 (currentChunkCoordX + xOffset, currentChunkCoordY + yOffset);
 
-        // CHeck whether the visible chunk has already been instatiated
+        // Check whether the visible chunk has already been instatiated
         if (terrainChunkDictionary.ContainsKey (viewedChunkCoord)) {
           terrainChunkDictionary [viewedChunkCoord].UpdateTerrainChunk ();
 
           // Check whether the terrain chunk is still visible
           if (terrainChunkDictionary[viewedChunkCoord].IsVisible()) {
+            // Keep the chunk in the dictionary if it is visible
             terrainChunksVisibleLastUpdate.Add(terrainChunkDictionary[viewedChunkCoord]);
           }
 
         } else {
-          terrainChunkDictionary.Add (viewedChunkCoord, new TerrainChunk (viewedChunkCoord, chunkSize, transform));
+          terrainChunkDictionary.Add (viewedChunkCoord, new TerrainChunk (viewedChunkCoord, chunkSize, transform, mapMaterial));
         }
       }
     }
@@ -60,16 +68,40 @@ public class EndlessTerrain : MonoBehaviour {
     Vector2 position;
     Bounds bounds;
 
-    public TerrainChunk(Vector2 coord, int size, Transform parent) {
+    MapData mapData;
+
+    MeshRenderer meshRenderer;
+    MeshFilter meshFilter;
+
+    public TerrainChunk(Vector2 coord, int size, Transform parent, Material material) {
       position = coord * size;
       bounds = new Bounds(position, Vector2.one * size);
       Vector3 positionV3 = new Vector3(position.x, 0, position.y);  // Vector 3 version of position for ease of use
 
-      meshObject = GameObject.CreatePrimitive(PrimitiveType.Plane);
+      // Instatiate the new terrain chunk
+      meshObject = new GameObject("Terrain Chunk");
+      meshRenderer = meshObject.AddComponent<MeshRenderer>();
+      meshFilter = meshObject.AddComponent<MeshFilter>();
+      meshRenderer.material = material;
+
+      // Setup the terrain chuck to its correct transform
       meshObject.transform.position = positionV3;
-      meshObject.transform.localScale = Vector3.one * size / 10f;  // Divide by 10 as default size is 10
       meshObject.transform.parent = parent;
       SetVisible(false);
+
+      // Get the data for constructing the terrain chunk mesh from the map generator
+      // The Map Generator's process is run on a thread and so we pass it the function we want executed afterwards as a callback
+      mapGenerator.RequestMapData(OnMapDataRecieved);
+    }
+
+    // After getting the map data, get the corisonding mesh data
+    void OnMapDataRecieved(MapData mapData) {
+      mapGenerator.RequestMeshData (mapData, OnMeshDataRecieved);
+    }
+
+    // Once all the data is recieved generate the mesh
+    void OnMeshDataRecieved(MeshData meshData) {
+      meshFilter.mesh = meshData.CreateMesh ();
     }
 
     public void UpdateTerrainChunk() {

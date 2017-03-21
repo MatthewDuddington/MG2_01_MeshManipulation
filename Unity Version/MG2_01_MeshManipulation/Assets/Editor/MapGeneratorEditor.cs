@@ -14,13 +14,13 @@ public class MapGeneratorEditor : Editor {
     // If auto update is active, refresh the various properties of the generated content as variables change
     if (DrawDefaultInspector ()) {
       if (mapGen.autoUpdate) {
-        mapGen.GenerateMap ();
+        mapGen.DrawMapInEditor ();
       }
     }
 
     // Add generate button to the inspector
     if (GUILayout.Button ("Generate")) {
-      mapGen.GenerateMap ();
+      mapGen.DrawMapInEditor ();
     }
   }
 
