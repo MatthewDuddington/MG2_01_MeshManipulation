@@ -13,9 +13,8 @@ public class MapGenerator : MonoBehaviour {
   // Size of mesh map chunks
   // Unity limits mesh vertices to 65,025 (255 * 255)
   // 241 because we use width - 1 and 240 has lots of factors to use with Level of Detail divisions
-  const int mapChunkSize = 241;
-  [Range(0,6)]
-  public int levelOfDetail;
+  public const int mapChunkSize = 241;
+  [Range(0,6)] public int levelOfDetail;
   public float noiseScale;
 
   public int octaves;

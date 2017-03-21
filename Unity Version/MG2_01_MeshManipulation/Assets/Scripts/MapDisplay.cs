@@ -5,20 +5,22 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+// Refreshes the drawable content of the gameobjects in the scene
 public class MapDisplay : MonoBehaviour {
 
-  public Renderer textureRenderer;
-  public MeshFilter meshFilter;
-  public MeshRenderer meshRenderer;
+  public Renderer textureRenderer;   // Controlls the application of the material to the mesh
+  public MeshFilter meshFilter;      // Where the vertices are stored
+  public MeshRenderer meshRenderer;  // Controlls drawing the mesh to the screen
 
+  // Apply the texture to the renderer component
   public void DrawTexture(Texture2D texture) {
     textureRenderer.sharedMaterial.mainTexture = texture;
     textureRenderer.transform.localScale = new Vector3 (texture.width, 1, texture.height);
   }
 
+  // Generate and apply the mesh to the mesh component
   public void DrawMesh(MeshData meshData, Texture2D texture) {
-    // Generate and apply the mesh to the mesh component
-    // Uses 'shared' versions of calls so that the mesh and texture can be accessed outside of game mode
+    // Use 'shared' versions of calls so that the mesh and texture can be accessed outside of game mode
     meshFilter.sharedMesh = meshData.CreateMesh ();
     meshRenderer.sharedMaterial.mainTexture = texture;
   }
