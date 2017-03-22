@@ -30,7 +30,7 @@ public static class MeshGenerator {
     // Loop across each row and column vertex in the mesh
     for (int y = 0; y < height; y += meshSimplificationIncrement) {
       for (int x = 0; x < width; x += meshSimplificationIncrement) {
-
+        
         // Add a vector 3 position for each vertex based on its index within the rows and columns, plus the centering and height offsets and smoothing curve
         meshData.vertices [vertexIndex] = new Vector3 (topLeftX + x, heightCurve.Evaluate(heightMap[x, y]) * heightMultiplyer, topLeftZ - y);
 
@@ -39,8 +39,8 @@ public static class MeshGenerator {
 
         // Ignore right and bottom edge vertices, define triangle pairs for each other vertex
         if (x < width - 1 && y < height - 1) {
-          meshData.AddTriangle (vertexIndex, vertexIndex + verticesPerLine + 1, vertexIndex + verticesPerLine);  // Triangle defined by top-left,     bottom-right and bottom left vertices of a square
-          meshData.AddTriangle (vertexIndex + verticesPerLine + 1, vertexIndex, vertexIndex + 1);      // Triangle defined by bottom-right, top-left     and top-right   vertices of a square
+          meshData.AddTriangle (vertexIndex                      , vertexIndex + verticesPerLine + 1, vertexIndex + verticesPerLine);  // Triangle defined by top-left,     bottom-right and bottom left vertices of a square
+          meshData.AddTriangle (vertexIndex + verticesPerLine + 1, vertexIndex                      , vertexIndex + 1              );  // Triangle defined by bottom-right, top-left     and top-right   vertices of a square
         }
 
         vertexIndex++;

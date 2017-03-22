@@ -21,7 +21,7 @@ public class MapGenerator : MonoBehaviour {
   // N.B. these have to be factors of the 'mapChunkSize width - 1' as above i.e. 240 in this case
   // 0 = all verticies,    1 = every 2nd vertex,  2 = every 4th vertex, 3 = every 6th vertex,
   // 4 = every 8th vertex, 5 = every 10th vertex, 6 = every 12th vertex
-  [Range(0,6)] public int levelOfDetail;
+  [Range(0,6)] public int editorPreviewLevelOfDetail;
 
   public int octaves;
   [Range(0,1)] public float persistance;
@@ -42,7 +42,8 @@ public class MapGenerator : MonoBehaviour {
   Queue<MapThreadInfo<MapData>> mapDataThreadInfoQueue = new Queue<MapThreadInfo<MapData>>();
   Queue<MapThreadInfo<MeshData>> meshDataThreadInfoQueue = new Queue<MapThreadInfo<MeshData>>();
 
-  MapData GenerateMapData() {
+  // Create the position and texture data for a map chunk
+  MapData GenerateMapData(Vector2 centre) {
     float[,] noiseMap = Noise.GenerateNoiseMap (mapChunkSize,
                                                 mapChunkSize,
                                                 seed,
@@ -50,7 +51,7 @@ public class MapGenerator : MonoBehaviour {
                                                 octaves,
                                                 persistance,
                                                 lacunarity,
-                                                offset);
+                                                centre + offset);
     Color[] colourMap = new Color[mapChunkSize * mapChunkSize];  // Set of pixel colours, to pass on to the texture
 
     // Loop through each future vertex data point
@@ -73,17 +74,17 @@ public class MapGenerator : MonoBehaviour {
   }
 
   // Starts up a new map data processing thread and promises to callback to a function (Endless Terrain's OnMapDataRecieved) once it is complete
-  public void RequestMapData(Action<MapData> callback) {
+  public void RequestMapData(Vector2 centre, Action<MapData> callback) {
     ThreadStart threadStart = delegate {
-      MapDataThread (callback);  // Pass the callback into the thread
+      MapDataThread (centre, callback);  // Pass the callback into the thread
     };
 
     new Thread (threadStart).Start ();
   }
 
   // The multi-thread code for generating each chunk's data individually
-  void MapDataThread(Action<MapData> callback) {
-    MapData mapData = GenerateMapData ();
+  void MapDataThread(Vector2 centre, Action<MapData> callback) {
+    MapData mapData = GenerateMapData (centre);
 
     // Lock the thread info queue so that multiple threads cant try to write data at the same time
     lock (mapDataThreadInfoQueue) {
@@ -92,15 +93,15 @@ public class MapGenerator : MonoBehaviour {
     }
   }
 
-  public void RequestMeshData(MapData mapData, Action<MeshData> callback) {
+  public void RequestMeshData(MapData mapData, int levelOfDetail, Action<MeshData> callback) {
     ThreadStart threadStart = delegate {
-      MeshDataThread (mapData, callback);  // Pass the callback into the thread
+      MeshDataThread (mapData, levelOfDetail, callback);  // Pass the callback into the thread
     };
 
     new Thread (threadStart).Start ();
   }
 
-  void MeshDataThread(MapData mapData, Action<MeshData> callback) {
+  void MeshDataThread(MapData mapData, int levelOfDetail, Action<MeshData> callback) {
     MeshData meshData = MeshGenerator.GenerateTerrainMesh (mapData.heightMap, meshHeightMultiplyer, meshHeightCurve, levelOfDetail);
 
     // Lock the thread info queue so that multiple threads cant try to write data at the same time
@@ -129,7 +130,7 @@ public class MapGenerator : MonoBehaviour {
   }
 
   public void DrawMapInEditor() {
-    MapData mapData = GenerateMapData ();
+    MapData mapData = GenerateMapData (Vector2.zero);
 
     // Switch for different rendering modes in the editor
     MapDisplay display = FindObjectOfType<MapDisplay> ();
@@ -141,7 +142,7 @@ public class MapGenerator : MonoBehaviour {
       display.DrawTexture (TextureGenerator.TextureFromColourMap (mapData.colourMap, mapChunkSize, mapChunkSize));
       break;
     case DrawMode.Mesh:  // Textured hight map effected mesh
-      display.DrawMesh (MeshGenerator.GenerateTerrainMesh (mapData.heightMap, meshHeightMultiplyer, meshHeightCurve, levelOfDetail), TextureGenerator.TextureFromColourMap (mapData.colourMap, mapChunkSize, mapChunkSize));
+      display.DrawMesh (MeshGenerator.GenerateTerrainMesh (mapData.heightMap, meshHeightMultiplyer, meshHeightCurve, editorPreviewLevelOfDetail), TextureGenerator.TextureFromColourMap (mapData.colourMap, mapChunkSize, mapChunkSize));
       break;
     default:
       Debug.LogWarning ("No draw mode selected");

@@ -4,29 +4,44 @@ using UnityEngine;
 
 public class EndlessTerrain : MonoBehaviour {
 
-  public const float maxViewDistance = 450;  // How far the player should be able to see
+  const float viewerMoveThresholdForChunkUpdate = 25f;
+  const float sqr_viewerMoveThresholdForChunkUpdate = viewerMoveThresholdForChunkUpdate * viewerMoveThresholdForChunkUpdate;
+
+  public LoDInfo[] detailLevels;
+  public static float maxViewDistance;  // How far the player should be able to see
+
   public Transform viewer;                   // The player whos view is being assessed
   public static Vector2 viewerPosition;      // Easy access to the position of that player
+  Vector2 viewerPositionOld;
 
   public Material mapMaterial;
 
   static MapGenerator mapGenerator;  // Easy access to the map generator
 
   int chunkSize;
-  int chunksVisibleInViewDistance;           // The number of chunks that will be rendered at the given view distance
+  int chunksVisibleInViewDistance;  // The number of chunks that will be rendered at the given view distance
 
   Dictionary<Vector2, TerrainChunk> terrainChunkDictionary = new Dictionary<Vector2, TerrainChunk>();
   List<TerrainChunk> terrainChunksVisibleLastUpdate = new List<TerrainChunk>();  // List of which chunks were visible in the previous frame 
 
   void Start() {
     mapGenerator = FindObjectOfType<MapGenerator> ();
+
+    maxViewDistance = detailLevels [detailLevels.Length - 1].visibleDistanceThreshold;  // Max view should be equal to the value of the last LoD element in the array
     chunkSize = MapGenerator.mapChunkSize - 1;
     chunksVisibleInViewDistance = Mathf.RoundToInt(maxViewDistance / chunkSize);
+
+    UpdateVisibleChunks ();  // Draw the chunks at least once at the start of the program
   }
 
   void Update() {
     viewerPosition = new Vector2 (viewer.position.x, viewer.position.z);
-    UpdateVisibleChunks ();
+
+    // Update chunk information only on frames where the player has moved sufficently
+    if ((viewerPositionOld - viewerPosition).sqrMagnitude > sqr_viewerMoveThresholdForChunkUpdate) {
+      viewerPositionOld = viewerPosition;  // Reset record of last viewer position where an update occoured
+      UpdateVisibleChunks ();
+    }
   }
 
   void UpdateVisibleChunks() {
@@ -56,7 +71,7 @@ public class EndlessTerrain : MonoBehaviour {
           }
 
         } else {
-          terrainChunkDictionary.Add (viewedChunkCoord, new TerrainChunk (viewedChunkCoord, chunkSize, transform, mapMaterial));
+          terrainChunkDictionary.Add (viewedChunkCoord, new TerrainChunk (viewedChunkCoord, chunkSize, detailLevels, transform, mapMaterial));
         }
       }
     }
@@ -68,12 +83,19 @@ public class EndlessTerrain : MonoBehaviour {
     Vector2 position;
     Bounds bounds;
 
-    MapData mapData;
-
     MeshRenderer meshRenderer;
     MeshFilter meshFilter;
 
-    public TerrainChunk(Vector2 coord, int size, Transform parent, Material material) {
+    LoDInfo[] detailLevels;
+    LoDMesh[] lodMeshes;
+    int previousLoDIndex = -1;
+
+    MapData mapData;
+    bool mapDataRecieved;
+
+    public TerrainChunk(Vector2 coord, int size, LoDInfo[] detailLevels, Transform parent, Material material) {
+      this.detailLevels = detailLevels;
+
       position = coord * size;
       bounds = new Bounds(position, Vector2.one * size);
       Vector3 positionV3 = new Vector3(position.x, 0, position.y);  // Vector 3 version of position for ease of use
@@ -89,25 +111,66 @@ public class EndlessTerrain : MonoBehaviour {
       meshObject.transform.parent = parent;
       SetVisible(false);
 
-      // Get the data for constructing the terrain chunk mesh from the map generator
+      lodMeshes = new LoDMesh[detailLevels.Length];
+      for (int i = 0; i < detailLevels.Length; i++) {
+        lodMeshes[i] = new LoDMesh(detailLevels[i].levelOfDetail, UpdateTerrainChunk);
+      }
+
+      // Get the data for constructing the terrain chunk mesh from the map generator, passing in the chunks position as the centre
       // The Map Generator's process is run on a thread and so we pass it the function we want executed afterwards as a callback
-      mapGenerator.RequestMapData(OnMapDataRecieved);
+      mapGenerator.RequestMapData(position, OnMapDataReceieved);
+
+      //      meshFilter.mesh = mapGeneratorGetMapChunkUnthreaded();
     }
 
     // After getting the map data, get the corisonding mesh data
-    void OnMapDataRecieved(MapData mapData) {
-      mapGenerator.RequestMeshData (mapData, OnMeshDataRecieved);
+    void OnMapDataReceieved(MapData mapData) {
+//      mapGenerator.RequestMeshData (mapData, OnMeshDataReceieved);
+      this.mapData = mapData;
+      mapDataRecieved = true;
+
+      Texture2D texture = TextureGenerator.TextureFromColourMap (mapData.colourMap, MapGenerator.mapChunkSize, MapGenerator.mapChunkSize);
+      meshRenderer.material.mainTexture = texture;
+
+      UpdateTerrainChunk ();  // Update the chunk only when new data is recieved
     }
 
     // Once all the data is recieved generate the mesh
-    void OnMeshDataRecieved(MeshData meshData) {
-      meshFilter.mesh = meshData.CreateMesh ();
-    }
+//    void OnMeshDataReceieved(MeshData meshData) {
+//      meshFilter.mesh = meshData.CreateMesh ();
+//    }
 
     public void UpdateTerrainChunk() {
-      float viewerDistanceFromNearestEdge = Mathf.Sqrt(bounds.SqrDistance (viewerPosition));
-      bool isVisible = viewerDistanceFromNearestEdge <= maxViewDistance;
-      SetVisible (isVisible);
+      if (mapDataRecieved) {
+
+        float viewerDistanceFromNearestEdge = Mathf.Sqrt(bounds.SqrDistance (viewerPosition));
+        bool isVisible = viewerDistanceFromNearestEdge <= maxViewDistance;
+
+        if (isVisible) {
+          int lodIndex = 0;
+
+          for (int i = 0; i < detailLevels.Length - 1; i++) {
+            if (viewerDistanceFromNearestEdge > detailLevels [i].visibleDistanceThreshold) {
+              lodIndex = i + 1;
+            } else {
+              break;
+            }
+          }
+
+          if (lodIndex != previousLoDIndex) {
+            LoDMesh lodMesh = lodMeshes [lodIndex];
+            if (lodMesh.hasMesh) {
+              previousLoDIndex = lodIndex;
+              meshFilter.mesh = lodMesh.mesh;
+            }
+            else if (!lodMesh.hasRequestedMesh) {
+              lodMesh.RequestMesh (mapData);
+            }
+          }
+        }
+
+        SetVisible (isVisible);
+      }
     }
 
     public void SetVisible(bool isVisible) {
@@ -117,6 +180,39 @@ public class EndlessTerrain : MonoBehaviour {
     public bool IsVisible() {
       return meshObject.activeSelf;
     }
+  }
+
+  class LoDMesh {
+
+    public Mesh mesh;
+    public bool hasRequestedMesh;
+    public bool hasMesh;
+    int levelOfDetail;
+    System.Action updateCallback;
+
+    public LoDMesh(int levelOfDetail, System.Action updateCallback) {
+      this.levelOfDetail = levelOfDetail;
+      this.updateCallback = updateCallback;
+    }
+
+    void OnMeshDataReceived(MeshData meshData) {
+      mesh = meshData.CreateMesh ();
+      hasMesh = true;
+
+      updateCallback ();
+    }
+
+    public void RequestMesh(MapData mapData) {
+      hasRequestedMesh = true;
+      mapGenerator.RequestMeshData (mapData, levelOfDetail, OnMeshDataReceived);
+    }
+
+  }
+    
+  [System.Serializable]
+  public struct LoDInfo {
+    public int levelOfDetail;
+    public float visibleDistanceThreshold;
   }
 
 }
