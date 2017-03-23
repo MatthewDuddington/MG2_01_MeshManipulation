@@ -9,7 +9,7 @@ using System.Threading;
 
 public class MapGenerator : MonoBehaviour {
 
-  public enum DrawMode { NoiseMap, ColourMap, Mesh };  // Method by which the generator should output / update inside the editor
+  public enum DrawMode { NoiseMap, ColourMap, Mesh, FallOffMap };  // Method by which the generator should output / update inside the editor
   public DrawMode drawMode;
 
   public Noise.NormaliseMode normaliseMode;
@@ -33,6 +33,8 @@ public class MapGenerator : MonoBehaviour {
   public int seed;  // Random number seed - to enable regeneration of specific maps
   public Vector2 offset;
 
+  public bool shouldUseFalloff;
+
   public float meshHeightMultiplyer;  // Scalar to controll exageration of terrain height
   public AnimationCurve meshHeightCurve;  // Curve to control how much multiplyer effects different regions
 
@@ -40,9 +42,15 @@ public class MapGenerator : MonoBehaviour {
 
   public TerrainType[] regions;  // Set of different terrain type information (e.g. colour) and the properties (e.g. height value %) at which it applies
 
+  float[,] fallOffMap;
+
   // Queues of map generation data returned from threads to be processed on the main thread as they are filled
   Queue<MapThreadInfo<MapData>> mapDataThreadInfoQueue = new Queue<MapThreadInfo<MapData>>();
   Queue<MapThreadInfo<MeshData>> meshDataThreadInfoQueue = new Queue<MapThreadInfo<MeshData>>();
+
+  void Awake() {
+    fallOffMap = FallOffGenerator.GenerateFallOffMap (mapChunkSize);
+  }
 
   // Create the position and texture data for a map chunk
   MapData GenerateMapData(Vector2 centre) {
@@ -60,6 +68,10 @@ public class MapGenerator : MonoBehaviour {
     // Loop through each future vertex data point
     for (int y = 0; y < mapChunkSize; y++) {
       for (int x = 0; x < mapChunkSize; x++) {
+        if (shouldUseFalloff) {
+          noiseMap [x, y] = Mathf.Clamp01(noiseMap [x, y] - fallOffMap [x, y]);
+        }
+
         // Determine the height from the grey value at the corisponding location in the voise map
         float currentHeight = noiseMap [x, y];
 
@@ -148,6 +160,9 @@ public class MapGenerator : MonoBehaviour {
     case DrawMode.Mesh:  // Textured hight map effected mesh
       display.DrawMesh (MeshGenerator.GenerateTerrainMesh (mapData.heightMap, meshHeightMultiplyer, meshHeightCurve, editorPreviewLevelOfDetail), TextureGenerator.TextureFromColourMap (mapData.colourMap, mapChunkSize, mapChunkSize));
       break;
+    case DrawMode.FallOffMap:
+      display.DrawTexture (TextureGenerator.TextureFromHeightMap (FallOffGenerator.GenerateFallOffMap (mapChunkSize)));
+      break;
     default:
       Debug.LogWarning ("No draw mode selected");
       break;
@@ -161,6 +176,8 @@ public class MapGenerator : MonoBehaviour {
     if (octaves < 0) {
       octaves = 0;
     }
+
+    fallOffMap = FallOffGenerator.GenerateFallOffMap (mapChunkSize);  // Ensure the falloff map is initialised
   }
 
   struct MapThreadInfo<T> {
