@@ -12,6 +12,8 @@ public class MapGenerator : MonoBehaviour {
   public enum DrawMode { NoiseMap, ColourMap, Mesh };  // Method by which the generator should output / update inside the editor
   public DrawMode drawMode;
 
+  public Noise.NormaliseMode normaliseMode;
+
   // Size of mesh map chunks
   // Unity limits mesh vertices to 65,025 (255 * 255)
   // 241 because we use width - 1 and 240 has lots of factors to use with Level of Detail divisions
@@ -51,7 +53,8 @@ public class MapGenerator : MonoBehaviour {
                                                 octaves,
                                                 persistance,
                                                 lacunarity,
-                                                centre + offset);
+                                                centre + offset,
+                                                normaliseMode);
     Color[] colourMap = new Color[mapChunkSize * mapChunkSize];  // Set of pixel colours, to pass on to the texture
 
     // Loop through each future vertex data point
@@ -61,8 +64,9 @@ public class MapGenerator : MonoBehaviour {
         float currentHeight = noiseMap [x, y];
 
         for (int i = 0; i < regions.Length; i++) {
-          if (currentHeight <= regions [i].height) {
+          if (currentHeight >= regions [i].height) {
             colourMap [y * mapChunkSize + x] = regions [i].colour;
+          } else {
             break;
           }
         }
