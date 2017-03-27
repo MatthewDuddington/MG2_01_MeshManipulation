@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Produces an edge mask that can be combined with the generated noise to smmothly remove structures at the edges of terrain chunks
-public static class SL_FallOffGenerator {
+public static class SL_FalloffGenerator {
 
   public static float[,] GenerateFallOffMap(int size) {
     float[,] map = new float[size, size];  // 2D array to hold the mask

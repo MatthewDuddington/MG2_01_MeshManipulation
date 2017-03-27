@@ -7,27 +7,30 @@ using UnityEngine;
 
 public class SL_EndlessTerrain : MonoBehaviour {
 
-  const float scale = 10f;
+  public const float scale = 10f;  // How big the reletive size of the map should be within the game
 
+  // Define how far the player can move away from their previous known location when the chunk was updated
+  // (saves on recalculations when the player is static or moving slowly)
+  // square distance stored to save on square root functions during comparisons
   const float viewerMoveThresholdForChunkUpdate = 25f;
   const float sqr_viewerMoveThresholdForChunkUpdate = viewerMoveThresholdForChunkUpdate * viewerMoveThresholdForChunkUpdate;
 
-  public LoDInfo[] detailLevels;
+  public LoDInfo[] detailLevels;        // User defiend set of distances at which the different level of detail meshes should be applied
   public static float maxViewDistance;  // How far the player should be able to see
 
-  public Transform viewer;                   // The player whos view is being assessed
-  public static Vector2 viewerPosition;      // Easy access to the position of that player
-  Vector2 viewerPositionOld;
+  public Transform viewer;               // The player whos view is being assessed
+  public static Vector2 viewerPosition;  // Easy access to the position of that player
+  Vector2 viewerPositionOld;             // Where the vierwer was previously seen when the chunk was updated
 
   public Material mapMaterial;
 
-  static SL_MapGenerator mapGenerator;  // Easy access to the map generator
+  public static SL_MapGenerator mapGenerator;  // Easy access to the map generator
 
   int chunkSize;
   int chunksVisibleInViewDistance;  // The number of chunks that will be rendered at the given view distance
 
-  Dictionary<Vector2, TerrainChunk> terrainChunkDictionary = new Dictionary<Vector2, TerrainChunk>();
-  static List<TerrainChunk> terrainChunksVisibleLastUpdate = new List<TerrainChunk>();  // List of which chunks were visible in the previous frame 
+  Dictionary<Vector2, SL_TerrainChunk> terrainChunkDictionary = new Dictionary<Vector2, SL_TerrainChunk>();  // List of all chunks which has been loaded into the game so far, which grows as the player explores
+  public static List<SL_TerrainChunk> terrainChunksVisibleLastUpdate = new List<SL_TerrainChunk>();          // List of which chunks were visible in the previous frame 
 
   void Start() {
     mapGenerator = FindObjectOfType<SL_MapGenerator> ();
@@ -61,153 +64,21 @@ public class SL_EndlessTerrain : MonoBehaviour {
     int currentChunkCoordX = Mathf.RoundToInt (viewerPosition.x / chunkSize);
     int currentChunkCoordY = Mathf.RoundToInt (viewerPosition.y / chunkSize);
 
+    // Loop through all the chunks in the distance grid surrounding the chunk the viewer is within
     for (int yOffset = -chunksVisibleInViewDistance; yOffset <= chunksVisibleInViewDistance; yOffset++) {
       for (int xOffset = -chunksVisibleInViewDistance; xOffset <= chunksVisibleInViewDistance; xOffset++) {
         Vector2 viewedChunkCoord = new Vector2 (currentChunkCoordX + xOffset, currentChunkCoordY + yOffset);
 
-        // Check whether the visible chunk has already been instatiated
+        // Check whether the visible chunk has already been instatiated...
         if (terrainChunkDictionary.ContainsKey (viewedChunkCoord)) {
+          // ...if so, then update it
           terrainChunkDictionary [viewedChunkCoord].UpdateTerrainChunk ();
         } else {
-          terrainChunkDictionary.Add (viewedChunkCoord, new TerrainChunk (viewedChunkCoord, chunkSize, detailLevels, transform, mapMaterial));
+          // ...otherwise instantiate a new chunk and add it to the map dictionary
+          terrainChunkDictionary.Add (viewedChunkCoord, new SL_TerrainChunk (viewedChunkCoord, chunkSize, detailLevels, transform, mapMaterial));
         }
       }
     }
-  }
-
-  public class TerrainChunk {
-
-    GameObject meshObject;
-    Vector2 position;
-    Bounds bounds;
-
-    MeshRenderer meshRenderer;
-    MeshFilter meshFilter;
-
-    LoDInfo[] detailLevels;
-    LoDMesh[] lodMeshes;
-    int previousLoDIndex = -1;
-
-    MapData mapData;
-    bool mapDataRecieved;
-
-    public TerrainChunk(Vector2 coord, int size, LoDInfo[] detailLevels, Transform parent, Material material) {
-      this.detailLevels = detailLevels;
-
-      position = coord * size;
-      bounds = new Bounds(position, Vector2.one * size);
-      Vector3 positionV3 = new Vector3(position.x, 0, position.y);  // Vector 3 version of position for ease of use
-
-      // Instatiate the new terrain chunk
-      meshObject = new GameObject("Terrain Chunk");
-      meshRenderer = meshObject.AddComponent<MeshRenderer>();
-      meshFilter = meshObject.AddComponent<MeshFilter>();
-      meshRenderer.material = material;
-
-      // Setup the terrain chuck to its correct transform
-      meshObject.transform.position = positionV3 * scale;
-      meshObject.transform.parent = parent;
-      meshObject.transform.localScale = Vector3.one * scale;
-      SetVisible(false);
-
-      lodMeshes = new LoDMesh[detailLevels.Length];
-      for (int i = 0; i < detailLevels.Length; i++) {
-        lodMeshes[i] = new LoDMesh(detailLevels[i].levelOfDetail, UpdateTerrainChunk);
-      }
-
-      // Get the data for constructing the terrain chunk mesh from the map generator, passing in the chunks position as the centre
-      // The Map Generator's process is run on a thread and so we pass it the function we want executed afterwards as a callback
-      mapGenerator.RequestMapData(position, OnMapDataReceieved);
-
-      //      meshFilter.mesh = mapGeneratorGetMapChunkUnthreaded();
-    }
-
-    // After getting the map data, get the corisonding mesh data
-    void OnMapDataReceieved(MapData mapData) {
-//      mapGenerator.RequestMeshData (mapData, OnMeshDataReceieved);
-      this.mapData = mapData;
-      mapDataRecieved = true;
-
-      Texture2D texture = SL_TextureGenerator.TextureFromColourMap (mapData.colourMap, SL_MapGenerator.mapChunkSize, SL_MapGenerator.mapChunkSize);
-      meshRenderer.material.mainTexture = texture;
-
-      UpdateTerrainChunk ();  // Update the chunk only when new data is recieved
-    }
-
-    // Once all the data is recieved generate the mesh
-//    void OnMeshDataReceieved(MeshData meshData) {
-//      meshFilter.mesh = meshData.CreateMesh ();
-//    }
-
-    public void UpdateTerrainChunk() {
-      if (mapDataRecieved) {
-
-        float viewerDistanceFromNearestEdge = Mathf.Sqrt(bounds.SqrDistance (viewerPosition));
-        bool isVisible = viewerDistanceFromNearestEdge <= maxViewDistance;
-
-        if (isVisible) {
-          int lodIndex = 0;
-
-          for (int i = 0; i < detailLevels.Length - 1; i++) {
-            if (viewerDistanceFromNearestEdge > detailLevels [i].visibleDistanceThreshold) {
-              lodIndex = i + 1;
-            } else {
-              break;
-            }
-          }
-
-          if (lodIndex != previousLoDIndex) {
-            LoDMesh lodMesh = lodMeshes [lodIndex];
-            if (lodMesh.hasMesh) {
-              previousLoDIndex = lodIndex;
-              meshFilter.mesh = lodMesh.mesh;
-            }
-            else if (!lodMesh.hasRequestedMesh) {
-              lodMesh.RequestMesh (mapData);
-            }
-          }
-
-          terrainChunksVisibleLastUpdate.Add (this);  // Add the chunk to the list of chunks to be cleaned up on next frame
-        }
-
-        SetVisible (isVisible);
-      }
-    }
-
-    public void SetVisible(bool isVisible) {
-      meshObject.SetActive (isVisible);
-    }
-
-    public bool IsVisible() {
-      return meshObject.activeSelf;
-    }
-  }
-
-  class LoDMesh {
-
-    public Mesh mesh;
-    public bool hasRequestedMesh;
-    public bool hasMesh;
-    int levelOfDetail;
-    System.Action updateCallback;
-
-    public LoDMesh(int levelOfDetail, System.Action updateCallback) {
-      this.levelOfDetail = levelOfDetail;
-      this.updateCallback = updateCallback;
-    }
-
-    void OnMeshDataReceived(MeshData meshData) {
-      mesh = meshData.CreateMesh ();
-      hasMesh = true;
-
-      updateCallback ();
-    }
-
-    public void RequestMesh(MapData mapData) {
-      hasRequestedMesh = true;
-      mapGenerator.RequestMeshData (mapData, levelOfDetail, OnMeshDataReceived);
-    }
-
   }
     
   [System.Serializable]

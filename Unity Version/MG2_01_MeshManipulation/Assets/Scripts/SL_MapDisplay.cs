@@ -19,7 +19,7 @@ public class SL_MapDisplay : MonoBehaviour {
   }
 
   // Generate and apply the mesh to the mesh component
-  public void DrawMesh(MeshData meshData, Texture2D texture) {
+  public void DrawMesh(SL_MeshData meshData, Texture2D texture) {
     // Use 'shared' versions of calls so that the mesh and texture can be accessed outside of game mode
     meshFilter.sharedMesh = meshData.CreateMesh ();
     meshRenderer.sharedMaterial.mainTexture = texture;
