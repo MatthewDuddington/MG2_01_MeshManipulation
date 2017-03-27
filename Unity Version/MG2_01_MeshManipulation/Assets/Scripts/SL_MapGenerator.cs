@@ -29,7 +29,7 @@ public class SL_MapGenerator : MonoBehaviour {
   [Range(0,6)] public int editorPreviewLevelOfDetail;
 
   public int octaves;
-  [Range(0,1)] public float persistance;
+  [Range(0,1)] public float persistence;
   public float lacunarity;
   public float noiseScale;  // Level of 'zoom' on the noise texture generated
 
@@ -68,7 +68,7 @@ public class SL_MapGenerator : MonoBehaviour {
                                               seed,
                                               noiseScale,
                                               octaves,
-                                              persistance,
+                                              persistence,
                                               lacunarity,
                                               centre + offset,
                                               normaliseMode);
